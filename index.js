@@ -11,7 +11,11 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 const resendApiKey = process.env.RESEND_API_KEY;
-const claimFormEmail = process.env.CLAIM_FORM_EMAIL;
+// Support multiple recipients: comma-separated in CLAIM_FORM_EMAIL
+const claimFormEmails = (process.env.CLAIM_FORM_EMAIL || '')
+  .split(',')
+  .map((e) => e.trim())
+  .filter(Boolean);
 const fromEmail = process.env.RESEND_FROM_EMAIL || 'onboarding@resend.dev';
 const fromName = process.env.RESEND_FROM_NAME || 'Claim Form';
 
@@ -113,7 +117,7 @@ function parseClaimBody(body) {
  * @param {string} [attachmentFilename] - Filename for the attachment
  */
 async function sendClaimEmail(claimId, date, company_name, customer_id, items, attachment, attachmentFilename) {
-  if (!resend || !claimFormEmail) return;
+  if (!resend || claimFormEmails.length === 0) return;
   const rows = items
     .map(
       (r, i) =>
@@ -155,7 +159,7 @@ async function sendClaimEmail(claimId, date, company_name, customer_id, items, a
     )
     .join('\n')}`;
   const from = fromName ? `${fromName} <${fromEmail}>` : fromEmail;
-  const payload = { from, to: claimFormEmail, subject: `Claim #${claimId} – ${company_name}`, html, text };
+  const payload = { from, to: claimFormEmails, subject: `Claim #${claimId} – ${company_name}`, html, text };
   if (attachment && Buffer.isBuffer(attachment) && attachmentFilename) {
     payload.attachments = [{ filename: attachmentFilename, content: attachment }];
   }
@@ -256,6 +260,6 @@ app.get('/api/health', (req, res) => {
 app.listen(PORT, () => {
   console.log(`Claim form server listening on port ${PORT}`);
   if (!pool) console.warn('DATABASE_URL not set: claims will not be stored.');
-  if (!resendApiKey || !claimFormEmail)
+  if (!resendApiKey || claimFormEmails.length === 0)
     console.warn('RESEND_API_KEY or CLAIM_FORM_EMAIL not set: claim emails will not be sent.');
 });
